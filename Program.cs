@@ -177,19 +177,12 @@ namespace UpTimeTracker
             };
             Controls.Add(_unitCombo);
 
-            // 重置计时按钮（扁平深色）
-            _btnReset = MakeFlatButton("↺ 重置计时");
-            _btnReset.Location = new Point(168, 168);
-            _btnReset.Size = new Size(110, 30);
-            _btnReset.Click += delegate { ResetTimer(); };
-            Controls.Add(_btnReset);
-
             _breakdownLabel = new Label();
             _breakdownLabel.Text = "";
             _breakdownLabel.Font = new Font("Consolas", 11.5f);
             _breakdownLabel.ForeColor = Color.FromArgb(150, 158, 178);
             _breakdownLabel.AutoSize = true;
-            _breakdownLabel.Location = new Point(292, 174);
+            _breakdownLabel.Location = new Point(180, 174);
             Controls.Add(_breakdownLabel);
 
             // ---- 信息卡片 ----
@@ -276,23 +269,6 @@ namespace UpTimeTracker
             c.Font = new Font("Microsoft YaHei UI", 9f);
             c.ForeColor = Color.FromArgb(190, 196, 212);
             return c;
-        }
-
-        private Label _btnReset; // 扁平深色重置按钮
-
-        private Label MakeFlatButton(string text)
-        {
-            Label b = new Label();
-            b.Text = text;
-            b.TextAlign = ContentAlignment.MiddleCenter;
-            b.Font = new Font("Microsoft YaHei UI", 9f);
-            b.ForeColor = Color.FromArgb(200, 206, 220);
-            b.BackColor = Color.FromArgb(32, 36, 48);
-            b.Cursor = Cursors.Hand;
-            b.Region = new Region(RoundedRegion(b.Size, 8));
-            b.MouseEnter += delegate { b.BackColor = Color.FromArgb(45, 50, 66); };
-            b.MouseLeave += delegate { b.BackColor = Color.FromArgb(32, 36, 48); };
-            return b;
         }
 
         private static GraphicsPath RoundedRegion(Size s, int r)
