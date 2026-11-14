@@ -212,7 +212,8 @@ namespace UpTimeTracker
             b.ForeColor = Color.FromArgb(180, 186, 200);
             b.BackColor = Color.Transparent;
             b.Cursor = Cursors.Hand;
-            b.MouseDown += OnTitleBarMouseDown;
+            // 注意：按钮不能接 OnTitleBarMouseDown（HTCAPTION 拖动会进入模态移动循环，
+            // 吞掉随后的 Click 事件，导致点关闭没反应）；拖动只挂在标题栏空白与标题文字上
             b.MouseEnter += delegate { b.ForeColor = Color.White; b.BackColor = Color.FromArgb(45, 50, 66); };
             b.MouseLeave += delegate { b.ForeColor = Color.FromArgb(180, 186, 200); b.BackColor = Color.Transparent; };
             return b;
