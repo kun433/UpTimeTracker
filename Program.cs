@@ -109,8 +109,10 @@ namespace UpTimeTracker
             _titleBar.Controls.Add(_titleLabel);
 
             _btnMin = MakeTitleButton("—", 90);
+            _btnMin.Location = new Point(520 - 46 - 90, 0); // 右上角：最小化
             _btnMin.Click += delegate { WindowState = FormWindowState.Minimized; };
             _btnClose = MakeTitleButton("✕", 46);
+            _btnClose.Location = new Point(520 - 46, 0);    // 最右上角：关闭/后台运行
             _btnClose.Click += OnCloseClicked;
             _titleBar.Controls.Add(_btnMin);
             _titleBar.Controls.Add(_btnClose);
