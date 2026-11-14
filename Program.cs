@@ -39,7 +39,7 @@ namespace UpTimeTracker
         // ---- 设置 ----
         private int _unitIndex;              // 0=自动 1=秒 2=分钟 3=小时 4=天 5=年
         private bool _topMost;
-        private bool _minimizeToTray;
+        private bool _minimizeToTray = true; // 默认：点 ✕ 隐藏到托盘后台运行
         private bool _startWithWindows;
 
         // ---- 控件 ----
@@ -59,6 +59,7 @@ namespace UpTimeTracker
         private NotifyIcon _tray;
         private int _lastMemUpdate;          // Environment.TickCount，内存标签每 2 秒刷新一次
         private int _lastTrimTick;           // 上次修剪工作集时间，每 5 分钟一次
+        private bool _trayHintShown;         // 首次点 ✕ 后台运行时的气泡提示只弹一次
 
         private bool _closeReallyExit;       // 托盘菜单“退出”时直接结束
         private bool _suppressSettingsSave;  // 启动回填设置时不落盘
@@ -173,7 +174,7 @@ namespace UpTimeTracker
                 SaveSettings();
             };
 
-            _chkTray = MakeCheckBox("关闭时最小化到托盘", new Point(160, 306));
+            _chkTray = MakeCheckBox("点 ✕ 后最小化到托盘（后台运行）", new Point(160, 306));
             _chkTray.CheckedChanged += delegate
             {
                 if (_suppressSettingsSave) return;
@@ -445,16 +446,22 @@ namespace UpTimeTracker
 
         private void OnCloseClicked(object sender, EventArgs e)
         {
-            _closeReallyExit = true;
-            Close();
+            Close(); // 由 OnFormClosing 决定：勾选了托盘选项则隐藏到后台，否则真正退出
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            if (!_closeReallyExit && _minimizeToTray && e.CloseReason == CloseReason.UserClosing)
+            bool userIntent = e.CloseReason == CloseReason.UserClosing
+                || e.CloseReason == CloseReason.TaskManagerClosing;
+            if (!_closeReallyExit && _minimizeToTray && userIntent)
             {
                 e.Cancel = true;
                 Hide();
+                if (!_trayHintShown && _tray != null)
+                {
+                    _trayHintShown = true;
+                    _tray.ShowBalloonTip(2000, "开机时长记录", "程序已最小化到托盘，仍在后台计时。\n双击托盘图标或右键退出可真正关闭。", ToolTipIcon.Info);
+                }
                 return;
             }
 
