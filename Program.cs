@@ -10,15 +10,34 @@ using System.Drawing.Drawing2D;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
+using Timer = System.Windows.Forms.Timer;
 using System.Windows.Forms;
 
 namespace UpTimeTracker
 {
     internal static class Program
     {
+        internal static Mutex SingleInstanceMutex;
+        internal static EventWaitHandle RestoreEvent;
+
         [STAThread]
         private static void Main()
         {
+            // 单实例：已在后台运行时，再次启动不新开窗口，而是唤醒已有实例
+            bool createdNew;
+            SingleInstanceMutex = new Mutex(true, "UpTimeTracker_SingleInstance", out createdNew);
+            if (!createdNew)
+            {
+                EventWaitHandle existing;
+                if (EventWaitHandle.TryOpenExisting("UpTimeTracker_RestoreEvent", out existing))
+                {
+                    existing.Set(); // 让第一个实例把窗口从托盘提起来
+                }
+                return;
+            }
+            RestoreEvent = new EventWaitHandle(false, EventResetMode.AutoReset, "UpTimeTracker_RestoreEvent");
+
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             Application.Run(new MainForm());
@@ -119,16 +138,26 @@ namespace UpTimeTracker
             Controls.Add(_titleBar);
 
             // ---- 主时间 ----
+            Label caption = new Label();
+            caption.Text = "本次开机已持续";
+            caption.Font = new Font("Microsoft YaHei UI", 9f);
+            caption.ForeColor = Color.FromArgb(120, 128, 148);
+            caption.AutoSize = true;
+            caption.Location = new Point(26, 66);
+            Controls.Add(caption);
+
             _timeLabel = new Label();
             _timeLabel.Text = "0";
             _timeLabel.Font = new Font("Consolas", 42f, FontStyle.Bold);
             _timeLabel.ForeColor = Color.FromArgb(88, 230, 217);
             _timeLabel.AutoSize = true;
-            _timeLabel.Location = new Point(24, 78);
+            _timeLabel.Location = new Point(26, 90);
             Controls.Add(_timeLabel);
 
             _unitCombo = new ComboBox();
             _unitCombo.DropDownStyle = ComboBoxStyle.DropDownList;
+            _unitCombo.DrawMode = DrawMode.OwnerDrawFixed;
+            _unitCombo.DrawItem += OnDrawUnitItem;
             _unitCombo.Font = new Font("Microsoft YaHei UI", 9.5f);
             _unitCombo.BackColor = Color.FromArgb(32, 36, 48);
             _unitCombo.ForeColor = Color.FromArgb(220, 224, 236);
@@ -137,8 +166,8 @@ namespace UpTimeTracker
             {
                 "自动", "秒", "分钟", "小时", "天", "年"
             });
-            _unitCombo.Location = new Point(26, 158);
-            _unitCombo.Size = new Size(140, 30);
+            _unitCombo.Location = new Point(26, 168);
+            _unitCombo.Size = new Size(130, 30);
             _unitCombo.SelectedIndexChanged += delegate
             {
                 if (_suppressSettingsSave) return;
@@ -148,26 +177,34 @@ namespace UpTimeTracker
             };
             Controls.Add(_unitCombo);
 
+            // 重置计时按钮（扁平深色）
+            _btnReset = MakeFlatButton("↺ 重置计时");
+            _btnReset.Location = new Point(168, 168);
+            _btnReset.Size = new Size(110, 30);
+            _btnReset.Click += delegate { ResetTimer(); };
+            Controls.Add(_btnReset);
+
             _breakdownLabel = new Label();
             _breakdownLabel.Text = "";
-            _breakdownLabel.Font = new Font("Consolas", 12f);
+            _breakdownLabel.Font = new Font("Consolas", 11.5f);
             _breakdownLabel.ForeColor = Color.FromArgb(150, 158, 178);
             _breakdownLabel.AutoSize = true;
-            _breakdownLabel.Location = new Point(200, 166);
+            _breakdownLabel.Location = new Point(292, 174);
             Controls.Add(_breakdownLabel);
 
             // ---- 信息卡片 ----
             Panel card = new Panel();
-            card.Location = new Point(26, 214);
+            card.Location = new Point(26, 216);
             card.Size = new Size(468, 74);
             card.BackColor = Color.FromArgb(26, 29, 39);
+            card.Region = new Region(RoundedRegion(card.Size, 12));
             Controls.Add(card);
 
             _sysUptimeLabel = MakeInfoLabel(card, new Point(16, 12));
             _memLabel = MakeInfoLabel(card, new Point(16, 42));
 
             // ---- 选项区 ----
-            _chkTopMost = MakeCheckBox("窗口置顶", new Point(26, 306));
+            _chkTopMost = MakeCheckBox("窗口置顶", new Point(26, 308));
             _chkTopMost.CheckedChanged += delegate
             {
                 if (_suppressSettingsSave) return;
@@ -176,7 +213,7 @@ namespace UpTimeTracker
                 SaveSettings();
             };
 
-            _chkTray = MakeCheckBox("点 ✕ 后最小化到托盘（后台运行）", new Point(160, 306));
+            _chkTray = MakeCheckBox("点 ✕ 后最小化到托盘（后台运行）", new Point(160, 308));
             _chkTray.CheckedChanged += delegate
             {
                 if (_suppressSettingsSave) return;
@@ -184,7 +221,7 @@ namespace UpTimeTracker
                 SaveSettings();
             };
 
-            _chkAutoStart = MakeCheckBox("开机自动运行（当前用户，无需管理员）", new Point(26, 338));
+            _chkAutoStart = MakeCheckBox("开机自动运行（当前用户，无需管理员）", new Point(26, 340));
             _chkAutoStart.CheckedChanged += OnAutoStartToggled;
 
             _suppressSettingsSave = true;
@@ -239,6 +276,51 @@ namespace UpTimeTracker
             c.Font = new Font("Microsoft YaHei UI", 9f);
             c.ForeColor = Color.FromArgb(190, 196, 212);
             return c;
+        }
+
+        private Label _btnReset; // 扁平深色重置按钮
+
+        private Label MakeFlatButton(string text)
+        {
+            Label b = new Label();
+            b.Text = text;
+            b.TextAlign = ContentAlignment.MiddleCenter;
+            b.Font = new Font("Microsoft YaHei UI", 9f);
+            b.ForeColor = Color.FromArgb(200, 206, 220);
+            b.BackColor = Color.FromArgb(32, 36, 48);
+            b.Cursor = Cursors.Hand;
+            b.Region = new Region(RoundedRegion(b.Size, 8));
+            b.MouseEnter += delegate { b.BackColor = Color.FromArgb(45, 50, 66); };
+            b.MouseLeave += delegate { b.BackColor = Color.FromArgb(32, 36, 48); };
+            return b;
+        }
+
+        private static GraphicsPath RoundedRegion(Size s, int r)
+        {
+            GraphicsPath p = new GraphicsPath();
+            p.AddArc(0, 0, r * 2, r * 2, 180, 90);
+            p.AddArc(s.Width - r * 2, 0, r * 2, r * 2, 270, 90);
+            p.AddArc(s.Width - r * 2, s.Height - r * 2, r * 2, r * 2, 0, 90);
+            p.AddArc(0, s.Height - r * 2, r * 2, r * 2, 90, 90);
+            p.CloseFigure();
+            return p;
+        }
+
+        // 下拉框深色化：自绘每一项（含选中高亮）
+        private void OnDrawUnitItem(object sender, DrawItemEventArgs e)
+        {
+            if (e.Index < 0) return;
+            bool selected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+            using (SolidBrush bg = new SolidBrush(selected ? Color.FromArgb(50, 56, 74) : Color.FromArgb(32, 36, 48)))
+            {
+                e.Graphics.FillRectangle(bg, e.Bounds);
+            }
+            using (SolidBrush fg = new SolidBrush(selected ? Color.FromArgb(88, 230, 217) : Color.FromArgb(220, 224, 236)))
+            {
+                string text = _unitCombo.GetItemText(_unitCombo.Items[e.Index]);
+                TextRenderer.DrawText(e.Graphics, text, e.Font, e.Bounds, fg.Color,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
+            }
         }
 
         private void OnTitleBarMouseDown(object sender, MouseEventArgs e)
@@ -331,6 +413,11 @@ namespace UpTimeTracker
 
         private void OnTick(object sender, EventArgs e)
         {
+            // 第二实例发来的唤醒信号：从托盘恢复窗口
+            if (Program.RestoreEvent != null && Program.RestoreEvent.WaitOne(0))
+            {
+                RestoreWindow();
+            }
             UpdateClock();
         }
 
